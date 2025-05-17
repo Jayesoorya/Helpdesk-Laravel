@@ -3,66 +3,64 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Validator;
 
 class DashboardController extends Controller
 {
-    private $secret = 'retro_key';
-
-    private function decodeToken($token)
-    {
-        try {
-            $token = str_replace('Bearer ', '', $token);
-            return JWT::decode($token, new Key($this->secret, 'HS256'));
-        } catch (\Exception $e) {
-            return null;
-        }
-    }   
-
-    private function validateUser($decoded)
-    {
-        return User::where('user_id', $decoded->user_id)
-                   ->where('email', $decoded->email)
-                   ->first();
-    }
-
     public function getTickets(Request $request)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded) return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
+        $userId = $request->get('user_id');
+        if (!$userId) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
 
-        $user = $this->validateUser($decoded);
-        if (!$user) return response()->json(['status' => false, 'message' => 'User validation failed'], 404);
+        $cacheKey = 'user_tickets_' . $userId;
 
-        $tickets = Ticket::where('user_id', $user->user_id)->get();
+        $tickets = Cache::get($cacheKey);
+        if (!$tickets) {
+        $tickets = DB::table('tickets')->where('user_id', $userId)->get();
+         Cache::put($cacheKey, $tickets);
+        }
+
         return response()->json(['status' => true, 'tickets' => $tickets]);
     }
 
     public function ticketDetails(Request $request, $id)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded) return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
+        $userId = $request->get('user_id');
+        if (!$userId) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
+        
+        $cacheKey = 'ticket_details_' . $userId . '_' . $id;
 
-        $user = $this->validateUser($decoded);
-        if (!$user) return response()->json(['status' => false, 'message' => 'User validation failed'], 404);
+        $ticket = Cache::get($cacheKey);
+        if (!$ticket) {
+        $ticket = DB::table('tickets')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
 
-        $ticket = Ticket::find($id);
-        return $ticket ?
-            response()->json(['status' => true, 'ticket' => $ticket]) :
-            response()->json(['status' => false, 'message' => 'Ticket not found'], 404);
+        if (!$ticket) {
+            return response()->json(['status' => false, 'message' => 'Ticket not found or access denied'], 404);
+        }
+        
+         Cache::put($cacheKey, $ticket);
+        }
+
+        return response()->json(['status' => true, 'ticket' => $ticket]);
     }
 
     public function createTicket(Request $request)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded) return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
-
-        $user = $this->validateUser($decoded);
-        if (!$user) return response()->json(['status' => false, 'message' => 'User validation failed'], 401);
+        $userId = $request->get('user_id');
+        if (!$userId) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
 
         $validator = Validator::make($request->all(), [
             'ticket' => 'required|min:5',
@@ -73,23 +71,24 @@ class DashboardController extends Controller
             return response()->json(['status' => false, 'message' => $validator->errors()->first()], 400);
         }
 
-        $ticket = Ticket::create([
+        DB::table('tickets')->insert([
             'ticket' => $request->ticket,
             'description' => $request->description,
             'status' => $request->status,
-            'user_id' => $user->user_id,
+            'user_id' => $userId,
         ]);
+
+        $this->refreshTicket($userId);
 
         return response()->json(['status' => true, 'message' => 'Ticket created successfully'], 201);
     }
 
     public function updateTicket(Request $request, $id)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded) return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
-
-        $user = $this->validateUser($decoded);
-        if (!$user) return response()->json(['status' => false, 'message' => 'User validation failed'], 401);
+        $userId = $request->get('user_id');
+        if (!$userId) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
 
         $validator = Validator::make($request->all(), [
             'ticket' => 'required|min:5',
@@ -100,93 +99,118 @@ class DashboardController extends Controller
             return response()->json(['status' => false, 'message' => $validator->errors()->first()], 400);
         }
 
-        $ticket = Ticket::find($id);
+        $ticket = DB::table('tickets')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();  
+
         if (!$ticket) {
-            return response()->json(['status' => false, 'message' => 'Ticket not found'], 404);
+            return response()->json(['status' => false, 'message' => 'Ticket not found or access denied'], 404);
         }
 
-        if ($ticket->user_id !== $user->user_id) {
-            return response()->json(['status' => false, 'message' => 'You are not authorized to update this ticket'], 403);
-        }
-    
-        $ticket->update([
+        DB::table('tickets')
+        ->where('id', $id)
+        ->where('user_id', $userId)
+        ->update([
             'ticket' => $request->ticket,
             'description' => $request->description,
             'status' => $request->status,
         ]);
+
+        $this->refreshTicket($userId);
 
         return response()->json(['status' => true, 'message' => 'Ticket updated successfully']);
     }
 
     public function deleteTicket(Request $request, $id)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded) return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
+        $userId = $request->get('user_id');
 
-        $user = $this->validateUser($decoded);
-        if (!$user) return response()->json(['status' => false, 'message' => 'User validation failed'], 401);
+        $ticket = DB::table('tickets')
+        ->where('id', $id)
+        ->where('user_id', $userId)
+        ->first();
 
-        $ticket = Ticket::find($id);
-        if ($ticket) {
-            if ($ticket->user_id !== $user->user_id) {
-                return response()->json(['status' => false, 'message' => 'You are not authorized to delete this ticket'  ], 403);
-            }
-            $ticket->delete();
-            return response()->json(['status' => true, 'message' => 'Ticket deleted successfully']);
-        } else {
-            return response()->json(['status' => false, 'message' => 'Ticket not found'], 404);
+        if (!$ticket) {
+            return response()->json(['status' => false, 'message' => 'Ticket not found or access denied'], 404);
         }
+
+        DB::table('tickets')
+        ->where('id', $id)
+        ->where('user_id', $userId)
+        ->delete();
+
+        $this->refreshTicket($userId);
+        
+        return response()->json(['status' => true, 'message' => 'Ticket deleted successfully']);
     }
 
-    public function logout(Request $request)
+    //cache refresh
+    private function refreshTicket($userId)
     {
-        return response()->json(['status' => true, 'message' => 'Logged out successfully']);
+        $cacheKey = 'user_tickets_' . $userId;
+        Cache::forget($cacheKey);
+
+        $tickets = DB::table('tickets')->where('user_id', $userId)->get();
+        Cache::put($cacheKey, $tickets);
     }
 
     public function getProfile(Request $request)
     {
-        $decoded = $this->decodeToken($request->header('Authorization'));
-        if (!$decoded){
-             return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
+        $userId = $request->get('user_id');
+        $cacheKey = 'user_profile_' . $userId;
+
+        $user = Cache::get($cacheKey);
+
+        if (!$user) {
+        $user = DB::table('users')
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$user) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
         }
-       // return response()->json(['decoded' => $decoded]);
-        $user = User::where('user_id', $decoded->user_id)->first();
-        if ($user) {
-            return response()->json(['status' => true, 'user' => $user]);
+        
+        Cache::put($cacheKey, $user);
         }
 
-        return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        return response()->json(['status' => true, 'user' => $user]);
     }
 
     public function changePassword(Request $request)
-{
-    $decoded = $this->decodeToken($request->header('Authorization'));
-    if (!$decoded) {
-        return response()->json(['status' => false, 'message' => 'Invalid token'], 401);
+    {
+        $userId = $request->get('user_id');
+        $user = DB::table('users')
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$user) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|min:6',
+            'new_password' => 'required|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'message' => $validator->errors()->first()], 400);
+        }
+
+        if (!password_verify($request->current_password, $user->password)) {
+            return response()->json(['status' => false, 'message' => 'Current password is incorrect'], 403);
+        }
+
+        DB::table('users')
+            ->where('user_id', $userId)
+            ->update(['password' => bcrypt($request->new_password)]);
+
+        return response()->json(['status' => true, 'message' => 'Password changed successfully']);
     }
 
-    $user = $this->validateUser($decoded);
-    if (!$user) {
-        return response()->json(['status' => false, 'message' => 'User validation failed'], 401);
+    public function logout(Request $request)
+    {
+        // You could invalidate token here if you're maintaining a blacklist
+        return response()->json(['status' => true, 'message' => 'Logged out successfully']);
     }
-
-    $validator = Validator::make($request->all(), [
-        'current_password' => 'required|min:6',
-        'new_password' => 'required|min:6|confirmed', // expects new_password_confirmation field
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json(['status' => false, 'message' => $validator->errors()->first()], 400);
-    }
-
-    if (!password_verify($request->current_password, $user->password)) {
-        return response()->json(['status' => false, 'message' => 'Current password is incorrect'], 403);
-    }
-
-    $user->password = bcrypt($request->new_password);
-    $user->save();
-
-    return response()->json(['status' => true, 'message' => 'Password changed successfully']);
-}
-
 }

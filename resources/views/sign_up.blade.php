@@ -29,7 +29,7 @@
                         <button class="btn btn-info mt-4" type="submit">Register</button>
                     </form>
                     <br>
-                    <a class="btn btn-secondary" href="{{route('login')}}">Back to Login</a>
+                    <a class="btn btn-secondary" href="/">Back to Login</a>
                     <p v-if="message">@{{ message }}</p>
                 </div>
             </div>
@@ -37,42 +37,10 @@
     </div>
 </div>
 
-
-<!-- <script src="resources/js/app/sign_up.js"></script> -->
-
 <!-- Vue + Axios CDN -->
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
-<script>
-new Vue({
-    el: '#app',
-    data: {
-        form: {
-            username: '',
-            password: '',
-            email: '',
-            phone_number: ''
-        },
-        message: ''
-    },
-    methods: {
-        register() {
-            axios.post('/api/register', this.form)
-                .then(response => {
-                    this.message = "Registration successful!";
-                    // optionally redirect
-                    // window.location.href = "/login";
-                })
-                .catch(error => {
-                    if (error.response && error.response.data) {
-                        this.message = error.response.data.message || 'Registration failed';
-                    } else {
-                        this.message = 'Registration failed';
-                    }
-                });
-        }
-    }
-});
+<script src="/js/sign_up.js"></script>
 
-</script>
+

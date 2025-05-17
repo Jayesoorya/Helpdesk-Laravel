@@ -55,45 +55,8 @@
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
 <!-- Vue Login Logic -->
-<script>
-    new Vue({
-        el: '#app',
-        data: {
-            email: '',
-            password: '',
-            showPassword: false,
-            errorMessage: ''
-        },
-        methods: {
-            login() {
-                axios.post('/api/login', {
-                    email: this.email,
-                    password: this.password
-                },
-                {
-                    headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "X-Requested-With": "XMLHttpRequest",
-                    //"X-API-KEY": "api123"
-                    }
-                })
-                .then(response => {
-                    const token = response.data.token;
-                    localStorage.setItem('token', token);
-                   window.location.href = '/home'; // redirect after login
-                   
+<script src="/js/login.js"></script>
 
-                })
-                .catch(error => {
-                    this.errorMessage = error.response?.data?.error || 'Login failed';
-                });
-            },
-            togglePassword() {
-            this.showPassword = !this.showPassword;
-            }
-        }
-    });
-</script>
 
 </body>
 </html>
