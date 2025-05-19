@@ -22,8 +22,8 @@ class DashboardController extends Controller
 
         $tickets = Cache::get($cacheKey);
         if (!$tickets) {
-        $tickets = DB::table('tickets')->where('user_id', $userId)->get();
-         Cache::put($cacheKey, $tickets);
+            $tickets = DB::table('tickets')->where('user_id', $userId)->get();
+            Cache::put($cacheKey, $tickets);
         }
 
         return response()->json(['status' => true, 'tickets' => $tickets]);
@@ -40,16 +40,16 @@ class DashboardController extends Controller
 
         $ticket = Cache::get($cacheKey);
         if (!$ticket) {
-        $ticket = DB::table('tickets')
-            ->where('id', $id)
-            ->where('user_id', $userId)
-            ->first();
+            $ticket = DB::table('tickets')
+                ->where('id', $id)
+                ->where('user_id', $userId)
+                ->first();
 
-        if (!$ticket) {
-            return response()->json(['status' => false, 'message' => 'Ticket not found or access denied'], 404);
-        }
-        
-         Cache::put($cacheKey, $ticket);
+            if (!$ticket) {
+                return response()->json(['status' => false, 'message' => 'Ticket not found or access denied'], 404);
+            }
+            
+            Cache::put($cacheKey, $ticket);
         }
 
         return response()->json(['status' => true, 'ticket' => $ticket]);
@@ -163,9 +163,9 @@ class DashboardController extends Controller
         $user = Cache::get($cacheKey);
 
         if (!$user) {
-        $user = DB::table('users')
-            ->where('user_id', $userId)
-            ->first();
+            $user = DB::table('users')
+                ->where('user_id', $userId)
+                ->first();
 
         if (!$user) {
             return response()->json(['status' => false, 'message' => 'User not found'], 404);
@@ -210,7 +210,6 @@ class DashboardController extends Controller
 
     public function logout(Request $request)
     {
-        // You could invalidate token here if you're maintaining a blacklist
         return response()->json(['status' => true, 'message' => 'Logged out successfully']);
     }
 }

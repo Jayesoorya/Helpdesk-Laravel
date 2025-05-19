@@ -27,10 +27,10 @@ class DeleteTickets extends Command
      */
     public function handle()
     {
-         $targetDate = Carbon::now()->subDays(2)->toDateString();
+        $targetDate = Carbon::now()->subDays(2)->toDateString();
 
         $deletedCount = DB::table('tickets')
-            ->whereDate('created_on', $targetDate)  // use your actual column name
+            ->whereDate('created_on', '<=', $targetDate) 
             ->delete();
 
         $this->info("Deleted $deletedCount ticket(s) from $targetDate.");

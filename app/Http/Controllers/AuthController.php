@@ -28,8 +28,8 @@ class AuthController extends Controller
         }
 
         $user = DB::table('users')
-            ->where('email', $request->email)
-            ->first();
+                ->where('email', $request->email)
+                ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
